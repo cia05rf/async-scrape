@@ -2,3 +2,6 @@
 setup.cfg
 setup.py
 async_scrape\__init__.py
+async_scrape/libs\async_scrape.py
+async_scrape/libs\base_scrape.py
+async_scrape/libs\scrape.py
