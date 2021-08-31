@@ -19,7 +19,8 @@ class AsyncScrape(BaseScrape):
         post_process_func:callable,
         post_process_kwargs:dict={},
         fetch_error_handler:callable=None,
-        proxy:bool=False,
+        use_proxy:bool=False,
+        proxy:str=None,
         pac_url:str=None,
         acceptable_error_limit:int=100,
         attempt_limit:int=5,
@@ -41,6 +42,7 @@ class AsyncScrape(BaseScrape):
         """
         #Init super
         super().__init__(
+            use_proxy=use_proxy,
             proxy=proxy,
             pac_url=pac_url
         )
@@ -107,12 +109,19 @@ class AsyncScrape(BaseScrape):
         """
         local_args = locals()
         #Get the proxy for this url
-        if self.proxy:
-            proxies = self.pac_session \
-                ._get_proxy_resolver(self.pac) \
-                .get_proxy_for_requests(url)
-            match = re.search("^(\w*)", str(url))
-            proxy = proxies[match.group()]
+        if self.use_proxy:
+            if self.proxy:
+                #use given proxy
+                proxy = self.proxy
+            elif self.pac:
+                #use pypac
+                proxies = self.pac_session \
+                    ._get_proxy_resolver(self.pac) \
+                    .get_proxy_for_requests(url)
+                match = re.search("^(\w*)", str(url))
+                proxy = proxies[match.group()]
+            else:
+                raise ValueError("Either pac_url or a proxy must being given in order for use_proxy to be True")
         else:
             proxy = None
         #Fetch with aiohttp session
@@ -229,7 +238,7 @@ class AsyncScrape(BaseScrape):
             }]
         """
         self.start_job()
-        if self.proxy:
+        if self.use_proxy:
             self._proxy()
         #Establish urls
         if not len(urls):

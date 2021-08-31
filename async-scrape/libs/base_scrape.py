@@ -5,7 +5,8 @@ import sys
 
 class BaseScrape:
     def __init__(self,
-        proxy:bool=False,
+        use_proxy:bool=False,
+        proxy:str=None,
         pac_url:str=None
         ):
         """Class for scrapping webpages
@@ -20,8 +21,9 @@ class BaseScrape:
         self.job_start = None
         self.job_end = None
         self.time_marks = []
+        self.use_proxy = use_proxy
         self.proxy = proxy
-        self.pac = get_pac(url=pac_url) if self.proxy else None
+        self.pac = get_pac(url=pac_url) if self.use_proxy else None
         self.pac_session = None
 
     def reset_pages_scraped(self):

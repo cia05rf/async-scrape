@@ -10,7 +10,8 @@ class Scrape(BaseScrape):
     def __init__(self,
         post_process_func:callable,
         post_process_kwargs:dict={},
-        proxy:bool=False,
+        use_proxy:bool=False,
+        proxy:str=None,
         pac_url:str=None):
         """Class for scrapping webpages
         
@@ -20,6 +21,7 @@ class Scrape(BaseScrape):
         """
         #Init super
         super().__init__(
+            use_proxy=use_proxy,
             proxy=proxy,
             pac_url=pac_url
         )
