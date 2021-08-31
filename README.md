@@ -21,7 +21,6 @@ pip install async-scrape
 ```
 
 ## How to use it
-If using a proxy this will use PyPac to find the proxy for that 
 ```
 #Create an instance
 from async_scrape import AsyncScrape

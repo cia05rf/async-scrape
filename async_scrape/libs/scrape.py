@@ -3,7 +3,7 @@ from urllib3.exceptions import NewConnectionError
 from requests_html import HTMLSession
 import logging
 
-from scraping.libs.base_scrape import BaseScrape
+from .base_scrape import BaseScrape
 
 
 class Scrape(BaseScrape):
