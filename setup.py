@@ -2,7 +2,7 @@ from distutils.core import setup
 setup(
   name = 'async-scrape',         # How you named your package folder (MyLib)
   packages = ['async_scrape'],   # Chose the same as "name"
-  version = '0.1',      # Start with a small number and increase it with every change you make
+  version = '0.1.1',      # Start with a small number and increase it with every change you make
   license = 'MIT',        # Chose a license from here: https://help.github.com/articles/licensing-a-repository
   description = 'A package designed to scrape webpages using aiohttp and asyncio. Has some error handling to overcome common issues such as sites blocking you after n requests over a short period.',   # Give a short description about your library
   author = 'Robert Franklin',                   # Type in your name
