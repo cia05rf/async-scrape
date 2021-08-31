@@ -5,11 +5,11 @@ setup(
   version = '0.1',      # Start with a small number and increase it with every change you make
   license = 'MIT',        # Chose a license from here: https://help.github.com/articles/licensing-a-repository
   description = 'A package designed to scrape webpages using aiohttp and asyncio. Has some error handling to overcome common issues such as sites blocking you after n requests over a short period.',   # Give a short description about your library
-  author = 'YOUR NAME',                   # Type in your name
+  author = 'Robert Franklin',                   # Type in your name
   author_email = 'cia05rf@gmail.com',      # Type in your E-Mail
   url = 'https://github.com/cia05rf/async-scrape/',   # Provide either the link to your github or to your website
   download_url = 'https://github.com/cia05rf/async-scrape/archive/refs/tags/v0.1.0.tar.gz',    # I explain this later on
-  keywords = ['SOME', 'MEANINGFULL', 'KEYWORDS'],   # Keywords that define your package best
+  keywords = [],   # Keywords that define your package best
   install_requires=[            # I get to this in a second
         "asyncio",
         "nest-asyncio",
