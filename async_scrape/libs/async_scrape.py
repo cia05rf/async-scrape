@@ -23,7 +23,7 @@ class AsyncScrape(BaseScrape):
         use_proxy:bool=False,
         proxy:str=None,
         pac_url:str=None,
-        acceptable_error_limit:int=100,
+        consecutive_error_limit:int=100,
         attempt_limit:int=5,
         rest_between_attempts:bool=True,
         rest_wait:int=60
@@ -58,13 +58,14 @@ class AsyncScrape(BaseScrape):
         self.gathered_tasks = None
         #Define allowed errors
         self.acceptable_errors = (ServerDisconnectedError, ClientConnectionError)
-        self.acceptable_error_limit = acceptable_error_limit
-        self.acceptable_error_count = 0
+        self.consecutive_error_limit = consecutive_error_limit
+        self.consecutive_error_count = 0
         #Define criteria for looping multiple attempts
         self.attempt_limit = attempt_limit
         self.rest_between_attempts = rest_between_attempts
         self.rest_wait = rest_wait
         self.tracker_df = None
+        self.cur_err = None
     
     async def shutdown(self):
         #Mark shutdown as started
@@ -108,7 +109,6 @@ class AsyncScrape(BaseScrape):
         ----
         list
         """
-        local_args = locals()
         #Get the proxy for this url
         if self.use_proxy:
             if self.proxy:
@@ -137,20 +137,31 @@ class AsyncScrape(BaseScrape):
                 self.acceptable_error_count = 0
                 return {"url":url, "func_resp":func_resp, "status":resp.status, "error":None}
         except Exception as e:
+            #Set the current error - increment if the same error
+            if type(e) == self.cur_err:
+                self.consecutive_error_count += 1
+            else:
+                self.cur_err = type(e)
+                self.consecutive_error_count = 1
             #Check if acceptabe error limit has been reached
             # this prevents functions from carrying on after a site has started blocking calls
-            if self.acceptable_error_count >= self.acceptable_error_limit \
+            if self.consecutive_error_count >= self.consecutive_error_limit \
                 and not self.shutdown_initiated:
-                self.shutdown()
-            if type(e) in self.acceptable_errors:
-                self.acceptable_error_count += 1
-                logging.warning(f"Acceptable error - {e} - consecutive count at {self.acceptable_error_count}/{self.acceptable_error_limit}")
-            elif self.fetch_error_handler:
+                await self.shutdown()
+                logging.warning(f"Consecutive error limit reached - {e} - consecutive count at {self.acceptable_error_count}/{self.acceptable_error_limit}")
+            #Check for error handler
+            if self.fetch_error_handler:
                 logging.info(f"Error passed to {self.fetch_error_handler.__name__}")
                 #Run the error handler
                 self.fetch_error_handler(url, e)
+            #Check if acceptable error
+            if type(e) in self.acceptable_errors:
+                logging.error(f"Acceptable error in request or post processing {url} - {e}")
+            #Raise error
             else:
-                logging.error(f"Unacceptable error in request or post processing {url} - {e}")
+                logging.error(f"Unhandled error in request or post processing {url} - {e}")
+                if f"{e}" == "":
+                    raise e
             return {"url":url, "func_resp":None, "status":None, "error":e}
 
     async def _fetch_async(self, 
