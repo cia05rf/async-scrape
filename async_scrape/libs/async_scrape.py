@@ -142,7 +142,7 @@ class AsyncScrape(BaseScrape):
                 else:
                     func_resp = None
                 #Reset self.acceptable_error_count if all goes fine
-                self.acceptable_error_count = 0
+                self.consecutive_error_count = 0
                 return {"url":url, "func_resp":func_resp, "status":resp.status, "error":None}
         except Exception as e:
             #Set the current error - increment if the same error
@@ -156,7 +156,7 @@ class AsyncScrape(BaseScrape):
             if self.consecutive_error_count >= self.consecutive_error_limit \
                 and not self.shutdown_initiated:
                 await self.shutdown()
-                logging.warning(f"Consecutive error limit reached - {e} - consecutive count at {self.acceptable_error_count}/{self.acceptable_error_limit}")
+                logging.warning(f"Consecutive error limit reached - {e} - consecutive count at {self.consecutive_error_count}/{self.consecutive_error_limit}")
             #Check for error handler
             if self.fetch_error_handler:
                 logging.info(f"Error passed to {self.fetch_error_handler.__name__}")

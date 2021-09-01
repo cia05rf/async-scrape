@@ -13,8 +13,11 @@ class BaseScrape:
         
         args:
         ----
-        post_process_func - callable - for processing html
-        post_process_kwargs - dict - kwargs for use in post processing
+        use_proxy - bool:False - should a proxy be used
+        proxy - str:None - what is the address of the proxy ONLY VALID IF
+            PROXY IS TRUE
+        pac_Url - str:None - the location of the pac information ONLY VALID IF
+            PROXY IS TRUE
         """
         self.pages_scraped = 0
         self.total_to_scrape = 0
