@@ -37,9 +37,17 @@ class AsyncScrape(BaseScrape):
         fetch_error_handler - callable:None - the function to be called if an
             error is experienced during _fetch. Passes in:
             url, error as arguments
-        proxy - bool:False - should a proxy be used
+        use_proxy - bool:False - should a proxy be used
+        proxy - str:None - what is the address of the proxy ONLY VALID IF
+            PROXY IS TRUE
         pac_Url - str:None - the location of the pac information ONLY VALID IF
             PROXY IS TRUE
+        consecutive_error_limit - int:100 - the number of times an error can be experienced 
+            in a row before the scrape is cancelled and a new round is started
+        attempt_limit - int:5 - number of times a url can be attempted before it's abandoned
+        rest_between_attempts - bool:True - should the program rest between scrapes
+        rest_wait - int:60 - how long should the program rest for ONLY VALID IF
+            REST_BETWEEN_SCRAPES IS TRUE
         """
         #Init super
         super().__init__(

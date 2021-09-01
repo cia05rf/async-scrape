@@ -5,7 +5,7 @@ setup(
     'async_scrape',
     'async_scrape/libs'
     ],
-  version = '0.1.3',
+  version = '0.1.4',
   license = 'MIT',        # Chose a license from here: https://help.github.com/articles/licensing-a-repository
   description = 'A package designed to scrape webpages using aiohttp and asyncio. Has some error handling to overcome common issues such as sites blocking you after n requests over a short period.',   # Give a short description about your library
   author = 'Robert Franklin',
