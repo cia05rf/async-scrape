@@ -1,12 +1,18 @@
 [tool.poetry]
-name = "async-scraping"
-version = "0.1.0"
+name = "async-scrape"
+version = "0.1.7"
 description = "A package designed to scrape webpages using aiohttp and asyncio. Has some error handling to overcome common issues such as sites blocking you after n requests over a short period."
-authors = ["Robert Franklin"]
+authors = ["Robert Franklin <cia05rf@gmail.com>"]
+maintainers = ["Robert Franklin <cia05rf@gmail.com>"]
 license = "MIT"
+readme = "README.md"
+homepage = ""
+repository = "https://github.com/cia05rf/async-scrape/"
+documentation = ""
+keywords = ["scraping", "async", "requests"]
 
 [tool.poetry.dependencies]
-python = "^3.9"
+python = "^3.8"
 asyncio = "^3.4.3"
 nest-asyncio = "^1.5.1"
 aiohttp = "^3.7.4"
@@ -16,6 +22,7 @@ pandas = "^1.3.2"
 
 [tool.poetry.dev-dependencies]
 ipykernel = "^6.3.1"
+pytest = "^6.2.5"
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]

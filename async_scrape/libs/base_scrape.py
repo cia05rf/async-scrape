@@ -1,6 +1,7 @@
 from datetime import datetime, timedelta
 from pypac import PACSession, get_pac
 import sys
+import re
 
 
 class BaseScrape:
@@ -28,6 +29,45 @@ class BaseScrape:
         self.proxy = proxy
         self.pac = get_pac(url=pac_url) if self.use_proxy else None
         self.pac_session = None
+
+    def _deconstruct_url(self, url):
+        if re.search(r"^http://", url):
+            return "http", url[7:]
+        elif re.search(r"^https://", url):
+            return "https", url[8:]
+        else:
+            raise ValueError(f"Invalid url -> {url}")
+
+    def _get_pac_session(self):
+        if not self.pac_session:
+            self.pac_session = PACSession(self.pac)
+        return self.pac_session
+
+    def _get_proxies(self, url):
+        if self.use_proxy:
+            #use pypac
+            proxies = self.pac_session \
+                ._get_proxy_resolver(self.pac) \
+                .get_proxy_for_requests(url)
+        else:
+            proxies = None
+        return proxies
+
+    def _get_proxy(self, url):
+        if self.use_proxy:
+            if self.proxy:
+                #use given proxy
+                proxy = self.proxy
+            elif self.pac:
+                #use pypac
+                proxies = self._get_proxies(url)
+                match = re.search(r"^(\w*)", str(url))
+                proxy = proxies[match.group()]
+            else:
+                raise ValueError("Either pac_url or a proxy must being given in order for use_proxy to be True")
+        else:
+            proxy = None
+        return proxy
 
     def reset_pages_scraped(self):
         self.pages_scraped = 0

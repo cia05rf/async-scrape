@@ -1,9 +1,7 @@
 
 import asyncio
-import re
 import nest_asyncio
 import aiohttp
-from pypac import PACSession
 import sys
 import logging
 import contextlib
@@ -83,21 +81,16 @@ class AsyncScrape(BaseScrape):
 
     def _proxy(self):
         #Set policy if using windows
-        if sys.platform.startswith("win") \
-            and sys.version_info[0] == 3 \
-            and sys.version_info[1] >= 8:
-            self._set_policy()
+        self._set_policy()
         #Start the pac session
         self._get_pac_session()
 
-    def _get_pac_session(self):
-        if not self.pac_session:
-            self.pac_session = PACSession(self.pac)
-        return self.pac_session
-
     def _set_policy(self):
-        policy = asyncio.WindowsSelectorEventLoopPolicy()
-        asyncio.set_event_loop_policy(policy)
+        if sys.platform.startswith("win") \
+            and sys.version_info[0] == 3 \
+            and sys.version_info[1] >= 8:
+            policy = asyncio.WindowsSelectorEventLoopPolicy()
+            asyncio.set_event_loop_policy(policy)
 
     def _get_event_loop(self):
         self.loop = asyncio.get_event_loop()
@@ -118,21 +111,7 @@ class AsyncScrape(BaseScrape):
         list
         """
         #Get the proxy for this url
-        if self.use_proxy:
-            if self.proxy:
-                #use given proxy
-                proxy = self.proxy
-            elif self.pac:
-                #use pypac
-                proxies = self.pac_session \
-                    ._get_proxy_resolver(self.pac) \
-                    .get_proxy_for_requests(url)
-                match = re.search("^(\w*)", str(url))
-                proxy = proxies[match.group()]
-            else:
-                raise ValueError("Either pac_url or a proxy must being given in order for use_proxy to be True")
-        else:
-            proxy = None
+        proxy = self._get_proxy(url)
         #Fetch with aiohttp session
         try:
             async with session.request("get", url, proxy=proxy, headers=self.headers) as resp:

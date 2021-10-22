@@ -25,7 +25,7 @@ pip install async-scrape
 #Create an instance
 from async_scrape import AsyncScrape
 
-def post_process(resp):
+def post_process(html, resp, **kwargs):
     """Function to process the gathered response from the request"""
     if resp.status == 200:
         return "Request worked"
