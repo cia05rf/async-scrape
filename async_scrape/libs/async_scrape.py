@@ -9,6 +9,8 @@ import pandas as pd
 from time import sleep
 
 from aiohttp.client_exceptions import ServerDisconnectedError, ClientConnectionError
+from asyncio.exceptions import TimeoutError
+from urllib.error import URLError
 
 from .base_scrape import BaseScrape
 
@@ -63,7 +65,8 @@ class AsyncScrape(BaseScrape):
         self.coro = None
         self.gathered_tasks = None
         #Define allowed errors
-        self.acceptable_errors = (ServerDisconnectedError, ClientConnectionError)
+        self.acceptable_errors = (ServerDisconnectedError, ClientConnectionError,
+            TimeoutError, URLError)
         self.consecutive_error_limit = consecutive_error_limit
         self.consecutive_error_count = 0
         #Define criteria for looping multiple attempts

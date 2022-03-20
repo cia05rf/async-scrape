@@ -13,7 +13,6 @@ keywords = ["scraping", "async", "requests"]
 
 [tool.poetry.dependencies]
 python = "^3.8"
-asyncio = "^3.4.3"
 nest-asyncio = "^1.5.1"
 aiohttp = "^3.7.4"
 PyPAC = "^0.15.0"
