@@ -1,2 +1,2 @@
-from .libs.async_scrape import AsyncScrape
-from .libs.scrape import Scrape
+from async_scrape.libs.async_scrape import AsyncScrape
+from async_scrape.libs.scrape import Scrape
