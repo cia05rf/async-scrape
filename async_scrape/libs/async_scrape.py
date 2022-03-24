@@ -95,8 +95,13 @@ class AsyncScrape(BaseScrape):
             policy = asyncio.WindowsSelectorEventLoopPolicy()
             asyncio.set_event_loop_policy(policy)
 
-    def _get_event_loop(self):
+    def _set_event_loop(self):
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
         self.loop = asyncio.get_event_loop()
+
+    def _get_event_loop(self):
+        self._set_event_loop()
         if isinstance(self.loop, asyncio.BaseEventLoop):
             nest_asyncio.apply()
         return self.loop
