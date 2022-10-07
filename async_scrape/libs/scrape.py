@@ -2,8 +2,8 @@ from time import sleep
 import pandas as pd
 from requests_html import HTMLSession
 import logging
-import sys
-
+from requests import Response
+from http.client import HTTPResponse
 
 from .base_scrape import BaseScrape
 from ..utils.header_vars import random_header_vars
@@ -73,6 +73,9 @@ class Scrape(BaseScrape):
         self._get_pac_session()
         self.session = self.pac_session
 
+    def _request(self, url: str):
+        return self.session.get(url, headers=self.headers)
+
     def _fetch(self, url):
         """Function to fetch HTML from url
 
@@ -88,16 +91,28 @@ class Scrape(BaseScrape):
         # Make the request
         try:
             if url:
-                resp = self.session.get(url, headers=self.headers)
-                if resp.status_code == 200:
-                    html = resp.text
-                    func_resp = self.post_process(
-                        html=html, resp=resp, **self.post_process_kwargs)
+                resp = self._request(url)
+                if isinstance(resp, Response):
+                    status = resp.status_code
+                    if status == 200:
+                        html = resp.text
+                    else:
+                        html = None
+                elif isinstance(resp, HTTPResponse):
+                    status = resp.status
+                    if status == 200:
+                        html = resp.read()
+                    else:
+                        html = None
                 else:
-                    func_resp = None
+                    raise TypeError(
+                        "resp should be of type HTTPResponse or Response")
+                func_resp = self.post_process(
+                    html=html, resp=resp, **self.post_process_kwargs) \
+                    if html is not None else None
                 # Reset self.acceptable_error_count if all goes fine
                 self.consecutive_error_count = 0
-                return {"url": url, "func_resp": func_resp, "status": resp.status_code, "error": None}
+                return {"url": url, "func_resp": func_resp, "status": status, "error": None}
         except Exception as e:
             # Set the current error - increment if the same error
             if type(e) == self.cur_err:

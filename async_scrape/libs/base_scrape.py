@@ -27,7 +27,8 @@ class BaseScrape:
         self.time_marks = []
         self.use_proxy = use_proxy
         self.proxy = proxy
-        self.pac = get_pac(url=pac_url) if self.use_proxy else None
+        self.pac = get_pac(url=pac_url) \
+            if self.use_proxy and pac_url is not None else None  
         self.pac_session = None
         # Variables for randomly generating headers
         self.header_vars = None
