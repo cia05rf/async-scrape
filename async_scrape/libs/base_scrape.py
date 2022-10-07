@@ -29,6 +29,8 @@ class BaseScrape:
         self.proxy = proxy
         self.pac = get_pac(url=pac_url) if self.use_proxy else None
         self.pac_session = None
+        # Variables for randomly generating headers
+        self.header_vars = None
 
     def _deconstruct_url(self, url):
         if re.search(r"^http://", url):
@@ -78,12 +80,12 @@ class BaseScrape:
         #Add time mark
         self.time_marks.append(datetime.now())
         #Calc loop time
-        loop_time_elapsed = self.time_marks[-1] - self.time_marks[-2]
+        loop_time_elapsed = (self.time_marks[-1] - self.time_marks[-2]).total_seconds()
         #Calc estimated finish time
-        total_time_elapsed = (datetime.now() - self.job_start).seconds
+        total_time_elapsed = (datetime.now() - self.job_start).total_seconds()
         est_total_time_s = total_time_elapsed + (self.total_to_scrape * total_time_elapsed / self.pages_scraped)
         #Output
-        sys.stdout.write(f"\rprocessed -> {self.pages_scraped}/{self.total_to_scrape} - loop time {loop_time_elapsed} - est finish {datetime.now() + timedelta(seconds=est_total_time_s)}\n")
+        sys.stdout.write(f"\rprocessed -> {self.pages_scraped}/{self.total_to_scrape} - loop time {loop_time_elapsed:.6f} - est finish {datetime.now() + timedelta(seconds=est_total_time_s)}\n")
         sys.stdout.flush()
 
     def throttle_tasks(self):
