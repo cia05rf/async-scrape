@@ -9,7 +9,6 @@ HEADER_VARS = {
     "Accept-Encoding": ["gzip, deflate, br"],
     "Accept-Language": ["en-GB,en-US;q=0.9,en;q=0.8"],
     "Dnt": ["1"],
-    "Host": ["httpbin.org"],
     "Upgrade-Insecure-Requests": ["1"],
     "User-Agent": [
         "Mozilla/5.0 (Linux; Android 12; SM-S906N Build/QP1A.190711.020; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/80.0.3987.119 Mobile Safari/537.36",
@@ -109,8 +108,8 @@ def gen_client_hint(ua:str) -> str:
     else:
         platform = "Linux"
         mobile = "?0"
-    ch_ua["Cec-CH-UA-Mobile"] = mobile
-    ch_ua["Cec-CH-UA-Platform"] = platform
+    ch_ua["Sec-CH-UA-Mobile"] = mobile
+    ch_ua["Sec-CH-UA-Platform"] = f'"{platform}"'
 
     # Get the user agent
     BROWSERS = {
@@ -147,7 +146,7 @@ def gen_client_hint(ua:str) -> str:
         ua_group = ua_group.split(" ")
         us_group = [create_ua_str(s) for s in ua_group]
         ua_s = ", ".join([s for s in us_group if s is not None]).strip()
-        ch_ua["Cec-CH-UA"] = ua_s
+        ch_ua["Sec-CH-UA"] = ua_s
     return ch_ua
 
 

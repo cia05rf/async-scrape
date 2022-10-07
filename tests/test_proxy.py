@@ -21,7 +21,8 @@ def test_async_scrape_proxy():
             consecutive_error_limit=10,
             attempt_limit=1,
             rest_between_attempts=True,
-            rest_wait=1
+            rest_wait=1,
+            randomise_headers=True
         )
         resps = async_scrape.scrape_all(URLS)
         result = True if len(resps) == len(URLS) else False
@@ -38,7 +39,8 @@ def test_scrape_all_proxy():
             proxy=None,
             pac_url=os.environ["pac_url"],
             consecutive_error_limit=10,
-            attempt_limit=1
+            attempt_limit=1,
+            randomise_headers=True
         )
         resps = scrape.scrape_all(URLS)
         result = True if len(resps) == len(URLS) else False
