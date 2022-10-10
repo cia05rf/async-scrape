@@ -14,6 +14,7 @@ from urllib.error import URLError
 
 from .base_scrape import BaseScrape
 from ..utils.header_vars import random_header_vars
+from ..utils.errors import HttpResponseStatusError
 
 
 class AsyncScrape(BaseScrape):
@@ -70,7 +71,7 @@ class AsyncScrape(BaseScrape):
         self.gathered_tasks = None
         # Define allowed errors
         self.acceptable_errors = (ServerDisconnectedError, ClientConnectionError,
-                                  TimeoutError, URLError)
+                                  TimeoutError, URLError, HttpResponseStatusError)
         self.consecutive_error_limit = consecutive_error_limit
         self.consecutive_error_count = 0
         # Define criteria for looping multiple attempts
@@ -122,17 +123,23 @@ class AsyncScrape(BaseScrape):
         ----
         list
         """
+        # Regenerate headers
+        if self.randomise_headers:
+            self.headers = random_header_vars(self.header_vars)
         # Get the proxy for this url
         proxy = self._get_proxy(url)
+        status = None
         # Fetch with aiohttp session
         try:
             async with session.request("get", url, proxy=proxy, headers=self.headers) as resp:
-                if resp.status == 200:
+                status = resp.status
+                if status == 200:
                     html = await resp.text()
                     func_resp = self.post_process(
                         html=html, resp=resp, **self.post_process_kwargs)
                 else:
-                    func_resp = None
+                    raise HttpResponseStatusError(
+                        f"url responded with a http status of {status}")
                 # Reset self.acceptable_error_count if all goes fine
                 self.consecutive_error_count = 0
                 return {"url": url, "func_resp": func_resp, "status": resp.status, "error": None}
@@ -158,7 +165,7 @@ class AsyncScrape(BaseScrape):
                 self.fetch_error_handler(url, e)
             # Check if acceptable error
             if type(e) in self.acceptable_errors:
-                logging.error(
+                logging.warning(
                     f"Acceptable error in request or post processing {url} - {e}")
             # Raise error
             else:
@@ -166,7 +173,7 @@ class AsyncScrape(BaseScrape):
                     f"Unhandled error in request or post processing {url} - {e}")
                 if f"{e}" == "":
                     raise e
-            return {"url": url, "func_resp": None, "status": None, "error": e}
+            return {"url": url, "func_resp": None, "status": status, "error": e}
 
     async def _fetch_async(self,
                            session, url
@@ -191,9 +198,6 @@ class AsyncScrape(BaseScrape):
         }
         # Fetch
         rtrn = await self._fetch(session, url)
-        # Regenerate headers
-        if self.randomise_headers:
-            self.headers = random_header_vars(self.header_vars)
         # Increment the pages scraped
         self.increment_pages_scraped()
         return rtrn
@@ -267,12 +271,13 @@ class AsyncScrape(BaseScrape):
             {"url": u, "scraped": False, "attempts": 0}
             for u in urls
         ])
-        resps = []
-        i = 0
-        scrape_urls = urls
+        resps = {}
+        scrape_urls = set(urls)
+        logging.info(f"{len(urls)} unique urls from {len(scrape_urls)}")
         # Start the loop
         self.loop = self._get_event_loop()
         while len(scrape_urls):
+            init_len = len(scrape_urls)
             # Ensure shutdown flag is reset self.shutdown_initiated
             self.shutdown_initiated = False
             self.reset_pages_scraped()
@@ -281,40 +286,10 @@ class AsyncScrape(BaseScrape):
             self.coro = self._fetch_all_async(scrape_urls)
             # Build try except clause for premature cancellation
             scrape_resps = self.loop.run_until_complete(self.coro)
-            # Add scrape_resps to resps
-            resps.extend(scrape_resps)
-            # Get scraped urls
-            scraped_urls = [
-                r["url"] for r in resps
-                if not r["error"]
-            ]
-            # Increment attempts count on each scraped url
-            self._increment_attempts(True, scrape_urls)
-            # Get errored urls
-            errored_urls = [
-                r["url"] for r in resps
-                if r["error"]
-            ]
-            # Increment attempts count on each attempted but failed (IE had an error
-            # but not cancelled)
-            self._increment_attempts(False, errored_urls)
-            # Remove scraped urls from scrape_urls
-            scrape_urls = [
-                u for u in scrape_urls
-                if u not in scraped_urls
-            ]
-            # Remove urls where too many attempts have been made
-            failed_urls = self.tracker_df[
-                self.tracker_df.attempts >= self.attempt_limit
-            ].url.to_list()
-            scrape_urls = [
-                u for u in scrape_urls
-                if u not in failed_urls
-            ]
-            logging.info(
-                f"Scraping round {i} complete, in this round - {len(scraped_urls)} urls scrapped, {len(errored_urls)} urls errored, {len(errored_urls) - len(scrape_urls)} urls failed, {len(scrape_urls)} remain unscrapped")
-            # Increment the loop number
-            i += 1
+            # Process responses
+            scrape_urls, resps, failed_urls = \
+                self.handle_responses(scrape_urls, resps,
+                                      scrape_resps, init_len)
             # Sleep before running again
             # - shutdown must have been initiated
             # - there must still be urls to scrape
@@ -324,7 +299,10 @@ class AsyncScrape(BaseScrape):
                     and self.rest_between_attempts:
                 logging.info(f"Sleeping for {self.rest_wait} seconds")
                 sleep(self.rest_wait)
-        logging.info(f"Scraping complete {len(failed_urls)} urls failed")
+        logging.info(
+            f"Scraping complete {len(failed_urls)}/{len(set(urls))} urls failed")
+        # Convert resps back
+        resps = [v for _, v in resps.items()]
         # end the job
         self.end_job()
         return resps

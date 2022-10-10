@@ -97,7 +97,7 @@ def gen_client_hint(ua:str) -> str:
             platform = os_group[0].strip()
             if len(os_group) > 1:
                 os = os_group[1]
-                if "iPhone" in os \
+                if "iPhone" in os or "iPhone" in platform \
                     or "Android" in os \
                     or "Windows Phone" in os:
                     mobile = "?1"
