@@ -5,7 +5,6 @@ import aiohttp
 import sys
 import logging
 import contextlib
-import pandas as pd
 from time import sleep
 
 from aiohttp.client_exceptions import ServerDisconnectedError, ClientConnectionError
@@ -78,7 +77,7 @@ class AsyncScrape(BaseScrape):
         self.attempt_limit = attempt_limit
         self.rest_between_attempts = rest_between_attempts
         self.rest_wait = rest_wait
-        self.tracker_df = None
+        self.tracker = None
         self.cur_err = None
 
     async def shutdown(self):
@@ -233,15 +232,6 @@ class AsyncScrape(BaseScrape):
             ]
             return resps
 
-    def _increment_attempts(self, scraped: bool, urls: list = None):
-        if urls:
-            filter_df = self.tracker_df.url.isin(urls)
-            self.tracker_df.loc[filter_df, "scraped"] = scraped
-            self.tracker_df.loc[filter_df, "attempts"] += 1
-        else:
-            self.tracker_df["scraped"] = scraped
-            self.tracker_df["attempts"] += 1
-
     # run from terminal
     def scrape_all(self, urls: list = []):
         """"Function asynchronously scraping html from urls and passing 
@@ -267,10 +257,10 @@ class AsyncScrape(BaseScrape):
         if not len(urls):
             return []
         # Set a dataframe for tracking the url attempts
-        self.tracker_df = pd.DataFrame([
-            {"url": u, "scraped": False, "attempts": 0}
+        self.tracker = {
+            u: {"scraped": False, "attempts": 0}
             for u in urls
-        ])
+        }
         resps = {}
         scrape_urls = set(urls)
         logging.info(f"{len(urls)} unique urls from {len(scrape_urls)}")

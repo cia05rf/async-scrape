@@ -1,5 +1,4 @@
 from time import sleep
-import pandas as pd
 from requests_html import HTMLSession
 import logging
 from requests import Response
@@ -66,7 +65,7 @@ class Scrape(BaseScrape):
         self.attempt_limit = attempt_limit
         self.rest_between_attempts = rest_between_attempts
         self.rest_wait = rest_wait
-        self.tracker_df = None
+        self.tracker = None
         self.cur_err = None
 
     def _proxy(self):
@@ -89,6 +88,7 @@ class Scrape(BaseScrape):
         list
         """
         resp = None
+        status = None
         # Make the request
         try:
             if url:
@@ -139,16 +139,7 @@ class Scrape(BaseScrape):
                     f"Unhandled error in request or post processing {url} - {e}")
                 if f"{e}" == "":
                     raise e
-            return {"url": url, "func_resp": None, "status": None, "error": e}
-
-    def _increment_attempts(self, scraped: bool, urls: list = None):
-        if urls:
-            filter_df = self.tracker_df.url.isin(urls)
-            self.tracker_df.loc[filter_df, "scraped"] = scraped
-            self.tracker_df.loc[filter_df, "attempts"] += 1
-        else:
-            self.tracker_df["scraped"] = scraped
-            self.tracker_df["attempts"] += 1
+            return {"url": url, "func_resp": None, "status": status, "error": e}
 
     # run from terminal
     def scrape_all(self, urls: list):
@@ -175,10 +166,10 @@ class Scrape(BaseScrape):
         if not len(urls):
             return []
         # Set a dataframe for tracking the url attempts
-        self.tracker_df = pd.DataFrame([
-            {"url": u, "scraped": False, "attempts": 0}
+        self.tracker = {
+            u: {"scraped": False, "attempts": 0}
             for u in urls
-        ])
+        }
         resps = {}
         scrape_urls = set(urls)
         logging.info(f"{len(urls)} unique urls from {len(scrape_urls)}")
@@ -188,7 +179,7 @@ class Scrape(BaseScrape):
             self.total_to_scrape = len(scrape_urls)
             # Run the scrapes
             scrape_resps = []
-            for url in urls:
+            for url in scrape_urls:
                 scrape_resps.append(self._fetch(url))
                 self.increment_pages_scraped()
                 # Regenerate headers

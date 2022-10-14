@@ -1,4 +1,3 @@
-import pandas as pd  # TEMP
 import pytest
 import traceback
 import logging

@@ -96,9 +96,8 @@ class BaseScrape:
         # Remove scraped urls from scrape_urls
         scrape_urls = scrape_urls.difference(success_urls)
         # Remove urls where too many attempts have been made
-        failed_urls = set(self.tracker_df[
-            self.tracker_df.attempts >= self.attempt_limit
-        ].url.to_list())
+        failed_urls = set(k for k, v in self.tracker.items()
+        if v["attempts"] >= self.attempt_limit)
         scrape_urls = scrape_urls.difference(failed_urls)
         logging.info(f"""Scraping round complete, summary:
     attempted:                               {init_len}
@@ -107,6 +106,11 @@ class BaseScrape:
     failed scrapes (will not attempt again): {len(failed_urls)}
     remaining urls:                          {len(scrape_urls)}""")
         return [scrape_urls, resps, failed_urls]
+
+    def _increment_attempts(self, scraped: bool, urls: list = []):
+        for u in urls:
+            self.tracker[u]["scraped"] = scraped
+            self.tracker[u]["attempts"] += 1
 
     def reset_pages_scraped(self):
         self.pages_scraped = 0
