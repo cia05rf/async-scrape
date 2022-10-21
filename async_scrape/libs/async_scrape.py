@@ -65,6 +65,8 @@ class AsyncScrape(BaseScrape):
             REST_BETWEEN_SCRAPES IS TRUE
         call_rate_limit: int = None
             Should the rate of calls be limited. Fingure is calls per minute.
+            WARNING - This is limited by running scrapes in batches. If this value
+            is larger than the number of urls then no limiting will be applied.
         randomise_headers: bool = False
             should the headers be randomised after each request
         """
@@ -307,8 +309,7 @@ class AsyncScrape(BaseScrape):
                 scrape_resps.extend(self.loop.run_until_complete(self.coro))
                 # Pause if call rate too fast
                 if i < len(batches) - 1:
-                    t = self.rate_limit_time(len(batch_urls), st_time)
-                    self.rate_limit_pause(t*len(batch_urls))
+                    self.limit_call_rate(len(batch_urls), st_time)
             # Process responses
             scrape_urls, new_resps, failed_urls = \
                 self.handle_responses(scrape_urls, scrape_resps, init_len)

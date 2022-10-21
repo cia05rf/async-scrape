@@ -78,21 +78,16 @@ class BaseScrape:
             proxy = None
         return proxy
 
-    def rate_limit_pause(self, t: float) -> None:
-        logging.info(f"Call rate limit exceeded, pausing for {t:.02f} seconds")
-        sleep(t)
-
-    def rate_limit_time(self, i: int, st_time: datetime) -> float:
+    def limit_call_rate(self, call_count: int, st_time: datetime) -> float:
         if self.call_rate_limit is not None:
             rate = (datetime.now() - st_time).total_seconds() \
-                / (i+1)
+                / call_count
             rate_limit = 60 / self.call_rate_limit
             if rate < rate_limit:
-                return rate_limit - rate
-            else:
-                return 0
-        else:
-            return 0
+                t = (rate_limit - rate) * call_count
+                sys.stdout.write(
+                    f"\nCall rate limit exceeded ({rate:.2f}<{rate_limit:.2f}), pausing for {t:.02f} seconds")
+                sleep(t)
 
     def handle_responses(self,
                          scrape_urls: List[str],
@@ -151,7 +146,7 @@ class BaseScrape:
         avg_time_elapsed = total_time_elapsed / self.pages_scraped
         # Output
         sys.stdout.write(
-            f"\rprocessed -> {self.pages_scraped}/{self.total_to_scrape} - avg time {avg_time_elapsed:.3f} - total time {timedelta(seconds=total_time_elapsed)} - est finish {datetime.now() + timedelta(seconds=est_total_time_s)}")
+            f"\rprocessed -> {self.pages_scraped}/{self.total_to_scrape} - avg time {avg_time_elapsed:.3f} - total time {timedelta(seconds=total_time_elapsed)} - est finish {(datetime.now() + timedelta(seconds=est_total_time_s)).strftime('%Y-%m-%d %H:%M:%S')}")
         sys.stdout.flush()
 
     def throttle_tasks(self):

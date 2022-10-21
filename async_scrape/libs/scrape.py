@@ -196,16 +196,15 @@ class Scrape(BaseScrape):
             self.total_to_scrape = len(scrape_urls)
             # Run the scrapes
             scrape_resps = []
-            st_time = datetime.now()
-            for i, url in enumerate(scrape_urls):
+            for url in scrape_urls:
+                st_time = datetime.now()
                 scrape_resps.append(self._fetch(url))
                 self.increment_pages_scraped()
                 # Regenerate headers
                 if self.randomise_headers:
                     self.headers = random_header_vars(self.header_vars)
                 # Rest if rate limiting
-                t = self.rate_limit_time(i, st_time)
-                self.rate_limit_pause(t)
+                self.limit_call_rate(1, st_time)
             # Process responses
             scrape_urls, new_resps, failed_urls = \
                 self.handle_responses(scrape_urls, scrape_resps, init_len)
