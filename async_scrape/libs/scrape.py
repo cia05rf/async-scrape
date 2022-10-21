@@ -1,4 +1,5 @@
 from time import sleep
+from datetime import datetime
 from requests_html import HTMLSession
 import logging
 from requests import Response
@@ -21,35 +22,50 @@ class Scrape(BaseScrape):
                  attempt_limit: int = 5,
                  rest_between_attempts: bool = True,
                  rest_wait: int = 60,
+                 call_rate_limit: int = None,
                  randomise_headers: bool = False
                  ):
         """Class for scrapping webpages
 
         args:
         ----
-        post_process_func - callable - for processing html
-        post_process_kwargs - dict:{} - kwargs for use in post processing
-        fetch_error_handler - callable:None - the function to be called if an
+        post_process_func: callable
+            for processing html
+        post_process_kwargs: dict = {}
+            kwargs for use in post processing
+        fetch_error_handler: callable = None
+            the function to be called if an
             error is experienced during _fetch. Passes in:
             url, error as arguments
-        use_proxy - bool:False - should a proxy be used
-        proxy - str:None - what is the address of the proxy ONLY VALID IF
+        use_proxy: bool = False
+            should a proxy be used
+        proxy: str = None
+            what is the address of the proxy ONLY VALID IF
             PROXY IS TRUE
-        pac_Url - str:None - the location of the pac information ONLY VALID IF
+        pac_url: str = None
+            the location of the pac information ONLY VALID IF
             PROXY IS TRUE
-        consecutive_error_limit - int:100 - the number of times an error can be experienced 
+        consecutive_error_limit: int = 100
+            the number of times an error can be experienced 
             in a row before the scrape is cancelled and a new round is started
-        attempt_limit - int:5 - number of times a url can be attempted before it's abandoned
-        rest_between_attempts - bool:True - should the program rest between scrapes
-        rest_wait - int:60 - how long should the program rest for ONLY VALID IF
+        attempt_limit: int = 5
+            number of times a url can be attempted before it's abandoned
+        rest_between_attempts: bool = True
+            should the program rest between scrapes
+        rest_wait: int = 60
+            how long should the program rest for ONLY VALID IF
             REST_BETWEEN_SCRAPES IS TRUE
-        randomise_headers - bool:False - should the headers be randomised after each request
+        call_rate_limit: int = None
+            Should the rate of calls be limited. Fingure is calls per minute.
+        randomise_headers: bool = False
+            should the headers be randomised after each request
         """
         # Init super
         super().__init__(
             use_proxy=use_proxy,
             proxy=proxy,
-            pac_url=pac_url
+            pac_url=pac_url,
+            call_rate_limit=call_rate_limit
         )
         self.post_process = post_process_func
         self.post_process_kwargs = post_process_kwargs
@@ -76,12 +92,13 @@ class Scrape(BaseScrape):
     def _request(self, url: str):
         return self.session.get(url, headers=self.headers)
 
-    def _fetch(self, url):
+    def _fetch(self, url: str):
         """Function to fetch HTML from url
 
         args:
         ----
-        url - str - url to be requested
+        url:str
+            url to be requested
 
         returns:
         ----
@@ -120,7 +137,6 @@ class Scrape(BaseScrape):
                 self.consecutive_error_count = 1
             # Check if acceptabe error limit has been reached
             # this prevents functions from carrying on after a site has started blocking calls
-            if self.consecutive_error_count >= self.consecutive_error_limit:
                 logging.warning(
                     f"Consecutive error limit reached - {e} - consecutive count at {self.consecutive_error_count}/{self.consecutive_error_limit}")
             # Check for error handler
@@ -170,8 +186,9 @@ class Scrape(BaseScrape):
             u: {"scraped": False, "attempts": 0}
             for u in urls
         }
-        resps = {}
+        resps = dict()
         scrape_urls = set(urls)
+        all_failed_urls = set()
         logging.info(f"{len(urls)} unique urls from {len(scrape_urls)}")
         while len(scrape_urls):
             init_len = len(scrape_urls)
@@ -179,16 +196,21 @@ class Scrape(BaseScrape):
             self.total_to_scrape = len(scrape_urls)
             # Run the scrapes
             scrape_resps = []
-            for url in scrape_urls:
+            st_time = datetime.now()
+            for i, url in enumerate(scrape_urls):
                 scrape_resps.append(self._fetch(url))
                 self.increment_pages_scraped()
                 # Regenerate headers
                 if self.randomise_headers:
                     self.headers = random_header_vars(self.header_vars)
+                # Rest if rate limiting
+                t = self.rate_limit_time(i, st_time)
+                self.rate_limit_pause(t)
             # Process responses
-            scrape_urls, resps, failed_urls = \
-                self.handle_responses(scrape_urls, resps,
-                                      scrape_resps, init_len)
+            scrape_urls, new_resps, failed_urls = \
+                self.handle_responses(scrape_urls, scrape_resps, init_len)
+            resps |= new_resps
+            all_failed_urls |= failed_urls
             # Sleep before running again
             # - shutdown must have been initiated
             # - there must still be urls to scrape
@@ -198,7 +220,7 @@ class Scrape(BaseScrape):
                 logging.info(f"Sleeping for {self.rest_wait} seconds")
                 sleep(self.rest_wait)
         logging.info(
-            f"Scraping complete {len(failed_urls)}/{len(set(urls))} urls failed")
+            f"Scraping complete {len(all_failed_urls)}/{len(set(urls))} urls failed")
         # Convert resps back
         resps = [v for _, v in resps.items()]
         # end the job

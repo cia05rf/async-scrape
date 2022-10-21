@@ -1,5 +1,6 @@
 
 import asyncio
+from datetime import datetime
 import nest_asyncio
 import aiohttp
 import sys
@@ -16,6 +17,7 @@ from ..utils.header_vars import random_header_vars
 from ..utils.errors import HttpResponseStatusError
 
 
+
 class AsyncScrape(BaseScrape):
     def __init__(self,
                  post_process_func: callable,
@@ -28,35 +30,50 @@ class AsyncScrape(BaseScrape):
                  attempt_limit: int = 5,
                  rest_between_attempts: bool = True,
                  rest_wait: int = 60,
+                 call_rate_limit: int = None,
                  randomise_headers: bool = False
                  ):
         """Class for scrapping webpages
 
         args:
         ----
-        post_process_func - callable - for processing html
-        post_process_kwargs - dict:{} - kwargs for use in post processing
-        fetch_error_handler - callable:None - the function to be called if an
+        post_process_func: callable
+            for processing html
+        post_process_kwargs: dict = {}
+            kwargs for use in post processing
+        fetch_error_handler: callable = None
+            the function to be called if an
             error is experienced during _fetch. Passes in:
             url, error as arguments
-        use_proxy - bool:False - should a proxy be used
-        proxy - str:None - what is the address of the proxy ONLY VALID IF
+        use_proxy: bool = False
+            should a proxy be used
+        proxy: str = None
+            what is the address of the proxy ONLY VALID IF
             PROXY IS TRUE
-        pac_Url - str:None - the location of the pac information ONLY VALID IF
+        pac_url: str = None
+            the location of the pac information ONLY VALID IF
             PROXY IS TRUE
-        consecutive_error_limit - int:100 - the number of times an error can be experienced 
+        consecutive_error_limit: int = 100
+            the number of times an error can be experienced 
             in a row before the scrape is cancelled and a new round is started
-        attempt_limit - int:5 - number of times a url can be attempted before it's abandoned
-        rest_between_attempts - bool:True - should the program rest between scrapes
-        rest_wait - int:60 - how long should the program rest for ONLY VALID IF
+        attempt_limit: int = 5
+            number of times a url can be attempted before it's abandoned
+        rest_between_attempts: bool = True
+            should the program rest between scrapes
+        rest_wait: int = 60
+            how long should the program rest for ONLY VALID IF
             REST_BETWEEN_SCRAPES IS TRUE
-        randomise_headers - bool:False - should the headers be randomised after each request
+        call_rate_limit: int = None
+            Should the rate of calls be limited. Fingure is calls per minute.
+        randomise_headers: bool = False
+            should the headers be randomised after each request
         """
         # Init super
         super().__init__(
             use_proxy=use_proxy,
             proxy=proxy,
-            pac_url=pac_url
+            pac_url=pac_url,
+            call_rate_limit=call_rate_limit
         )
         self.post_process = post_process_func
         self.post_process_kwargs = post_process_kwargs
@@ -110,13 +127,14 @@ class AsyncScrape(BaseScrape):
             nest_asyncio.apply()
         return self.loop
 
-    async def _fetch(self, session, url):
+    async def _fetch(self, session: aiohttp.ClientSession, url: str):
         """Function to fetch HTML from url
 
         args:
         ----
-        session - aiohttp.ClientSession() object
-        url - str - url to be requested
+        session:aiohttp.ClientSession
+        url:str
+            url to be requested
 
         returns:
         ----
@@ -261,8 +279,10 @@ class AsyncScrape(BaseScrape):
             u: {"scraped": False, "attempts": 0}
             for u in urls
         }
-        resps = {}
+        resps = dict()
+        scrape_resps = []
         scrape_urls = set(urls)
+        all_failed_urls = set()
         logging.info(f"{len(urls)} unique urls from {len(scrape_urls)}")
         # Start the loop
         self.loop = self._get_event_loop()
@@ -272,14 +292,28 @@ class AsyncScrape(BaseScrape):
             self.shutdown_initiated = False
             self.reset_pages_scraped()
             self.total_to_scrape = len(scrape_urls)
-            # Gaher tasks and run
-            self.coro = self._fetch_all_async(scrape_urls)
-            # Build try except clause for premature cancellation
-            scrape_resps = self.loop.run_until_complete(self.coro)
+            # Create batches for rate limiting
+            scrape_urls = list(scrape_urls)
+            batches = [set(scrape_urls[i:i+self.call_rate_limit])
+                       for i in range(0, self.total_to_scrape, self.call_rate_limit)] \
+                if self.call_rate_limit is not None \
+                else [set(scrape_urls)]
+            scrape_urls = set(scrape_urls)
+            for i, batch_urls in enumerate(batches):
+                st_time = datetime.now()
+                # Gather tasks and run
+                self.coro = self._fetch_all_async(batch_urls)
+                # Build try except clause for premature cancellation
+                scrape_resps.extend(self.loop.run_until_complete(self.coro))
+                # Pause if call rate too fast
+                if i < len(batches) - 1:
+                    t = self.rate_limit_time(len(batch_urls), st_time)
+                    self.rate_limit_pause(t*len(batch_urls))
             # Process responses
-            scrape_urls, resps, failed_urls = \
-                self.handle_responses(scrape_urls, resps,
-                                      scrape_resps, init_len)
+            scrape_urls, new_resps, failed_urls = \
+                self.handle_responses(scrape_urls, scrape_resps, init_len)
+            resps |= new_resps
+            all_failed_urls |= failed_urls
             # Sleep before running again
             # - shutdown must have been initiated
             # - there must still be urls to scrape
@@ -290,7 +324,7 @@ class AsyncScrape(BaseScrape):
                 logging.info(f"Sleeping for {self.rest_wait} seconds")
                 sleep(self.rest_wait)
         logging.info(
-            f"Scraping complete {len(failed_urls)}/{len(set(urls))} urls failed")
+            f"Scraping complete {len(all_failed_urls)}/{len(set(urls))} urls failed")
         # Convert resps back
         resps = [v for _, v in resps.items()]
         # end the job

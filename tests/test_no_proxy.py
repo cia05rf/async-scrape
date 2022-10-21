@@ -109,7 +109,7 @@ URLS = ['https://www.google.com/search?q=weather',
 
 
 def _post_process_func(html, resp):
-    return None
+    return "Hello world"
 
 
 def test_async_scrape_no_proxy():
@@ -121,6 +121,28 @@ def test_async_scrape_no_proxy():
             attempt_limit=5,
             rest_between_attempts=True,
             rest_wait=60,
+            call_rate_limit=None,
+            randomise_headers=True
+        )
+        resps = async_scrape.scrape_all(URLS)
+        urls = set(URLS)
+        success = [False if r["error"] else True for r in resps]
+        result = True if len(success) == len(urls) else False
+    except Exception as e:
+        result = False
+    assert result is True
+
+
+def test_async_scrape_no_proxy_call_rate_limited():
+    try:
+        async_scrape = AsyncScrape(
+            _post_process_func,
+            use_proxy=False,
+            consecutive_error_limit=100,
+            attempt_limit=5,
+            rest_between_attempts=True,
+            rest_wait=60,
+            call_rate_limit=50,
             randomise_headers=True
         )
         resps = async_scrape.scrape_all(URLS)
@@ -137,6 +159,33 @@ def test_scrape_all_no_proxy():
         scrape = Scrape(
             _post_process_func,
             use_proxy=False,
+            consecutive_error_limit=100,
+            attempt_limit=5,
+            rest_between_attempts=True,
+            rest_wait=60,
+            call_rate_limit=None,
+            randomise_headers=True
+        )
+        resps = scrape.scrape_all(URLS)
+        urls = set(URLS)
+        success = [False if r["error"] else True for r in resps]
+        result = True if len(success) == len(urls) else False
+    except Exception as e:
+        logging.error(traceback.format_exc())
+        result = False
+    assert result is True
+
+
+def test_scrape_all_no_proxy_call_rate_limited():
+    try:
+        scrape = Scrape(
+            _post_process_func,
+            use_proxy=False,
+            consecutive_error_limit=100,
+            attempt_limit=5,
+            rest_between_attempts=True,
+            rest_wait=60,
+            call_rate_limit=50,
             randomise_headers=True
         )
         resps = scrape.scrape_all(URLS)

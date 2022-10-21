@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta
+from typing import List
 from pypac import PACSession, get_pac
 import sys
 import re
@@ -10,7 +11,8 @@ class BaseScrape:
     def __init__(self,
                  use_proxy: bool = False,
                  proxy: str = None,
-                 pac_url: str = None
+                 pac_url: str = None,
+                 call_rate_limit: int = None
                  ):
         """Class for scrapping webpages
 
@@ -34,6 +36,7 @@ class BaseScrape:
         self.pac_session = None
         # Variables for randomly generating headers
         self.header_vars = None
+        self.call_rate_limit = call_rate_limit
 
     def _deconstruct_url(self, url):
         if re.search(r"^http://", url):
@@ -75,9 +78,29 @@ class BaseScrape:
             proxy = None
         return proxy
 
-    def handle_responses(self, scrape_urls, resps, scrape_resps, init_len):
+    def rate_limit_pause(self, t: float) -> None:
+        logging.info(f"Call rate limit exceeded, pausing for {t:.02f} seconds")
+        sleep(t)
+
+    def rate_limit_time(self, i: int, st_time: datetime) -> float:
+        if self.call_rate_limit is not None:
+            rate = (datetime.now() - st_time).total_seconds() \
+                / (i+1)
+            rate_limit = 60 / self.call_rate_limit
+            if rate < rate_limit:
+                return rate_limit - rate
+            else:
+                return 0
+        else:
+            return 0
+
+    def handle_responses(self,
+                         scrape_urls: List[str],
+                         scrape_resps: dict,
+                         init_len: int
+                         ):
         # Add scrape_resps to resps
-        resps |= {r["url"]: r for r in scrape_resps}
+        new_resps = {r["url"]: r for r in scrape_resps}
         # Get scraped urls
         # Split success and fails
         success_urls = set([
@@ -97,7 +120,7 @@ class BaseScrape:
         scrape_urls = scrape_urls.difference(success_urls)
         # Remove urls where too many attempts have been made
         failed_urls = set(k for k, v in self.tracker.items()
-        if v["attempts"] >= self.attempt_limit)
+                          if v["attempts"] >= self.attempt_limit)
         scrape_urls = scrape_urls.difference(failed_urls)
         logging.info(f"""Scraping round complete, summary:
     attempted:                               {init_len}
@@ -105,7 +128,7 @@ class BaseScrape:
     errored scrapes (will attempt again):    {len(errored_urls)}
     failed scrapes (will not attempt again): {len(failed_urls)}
     remaining urls:                          {len(scrape_urls)}""")
-        return [scrape_urls, resps, failed_urls]
+        return [scrape_urls, new_resps, failed_urls]
 
     def _increment_attempts(self, scraped: bool, urls: list = []):
         for u in urls:
@@ -120,16 +143,15 @@ class BaseScrape:
         self.pages_scraped += 1
         # Add time mark
         self.time_marks.append(datetime.now())
-        # Calc loop time
-        loop_time_elapsed = (
-            self.time_marks[-1] - self.time_marks[-2]).total_seconds()
         # Calc estimated finish time
         total_time_elapsed = (datetime.now() - self.job_start).total_seconds()
         est_total_time_s = total_time_elapsed + \
             (self.total_to_scrape * total_time_elapsed / self.pages_scraped)
+        # Calc av time
+        avg_time_elapsed = total_time_elapsed / self.pages_scraped
         # Output
         sys.stdout.write(
-            f"\rprocessed -> {self.pages_scraped}/{self.total_to_scrape} - loop time {loop_time_elapsed:.6f} - est finish {datetime.now() + timedelta(seconds=est_total_time_s)}\n")
+            f"\rprocessed -> {self.pages_scraped}/{self.total_to_scrape} - avg time {avg_time_elapsed:.3f} - total time {timedelta(seconds=total_time_elapsed)} - est finish {datetime.now() + timedelta(seconds=est_total_time_s)}")
         sys.stdout.flush()
 
     def throttle_tasks(self):
