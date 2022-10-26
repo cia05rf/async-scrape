@@ -1,6 +1,7 @@
 
 import asyncio
 from datetime import datetime
+from typing import List, Set, Union
 import nest_asyncio
 import aiohttp
 import sys
@@ -15,7 +16,6 @@ from urllib.error import URLError
 from .base_scrape import BaseScrape
 from ..utils.header_vars import random_header_vars
 from ..utils.errors import HttpResponseStatusError
-
 
 
 class AsyncScrape(BaseScrape):
@@ -129,14 +129,21 @@ class AsyncScrape(BaseScrape):
             nest_asyncio.apply()
         return self.loop
 
-    async def _fetch(self, session: aiohttp.ClientSession, url: str):
+    async def _fetch(self,
+                     session: aiohttp.ClientSession,
+                     req_features: List[Union[str, dict]],
+                     req_type: str = "GET"):
         """Function to fetch HTML from url
 
         args:
         ----
-        session:aiohttp.ClientSession
-        url:str
-            url to be requested
+        session: aiohttp.ClientSession
+        req_features: List[Union[str, dict]]
+            the features of the request. 
+            GET - this is a list with one entry [url] 
+            POST - this is a list with two entries [url, payload] 
+        req_type: str = "GET"
+            The type of request to execute
 
         returns:
         ----
@@ -146,11 +153,18 @@ class AsyncScrape(BaseScrape):
         if self.randomise_headers:
             self.headers = random_header_vars(self.header_vars)
         # Get the proxy for this url
+        url, payload = req_features
         proxy = self._get_proxy(url)
         status = None
         # Fetch with aiohttp session
         try:
-            async with session.request("get", url, proxy=proxy, headers=self.headers) as resp:
+            async with session.request(
+                req_type.lower(),
+                url,
+                json=dict(payload) if payload is not None else None,
+                proxy=proxy,
+                headers=self.headers
+            ) as resp:
                 status = resp.status
                 if status == 200:
                     html = await resp.text()
@@ -161,7 +175,7 @@ class AsyncScrape(BaseScrape):
                         f"url responded with a http status of {status}")
                 # Reset self.acceptable_error_count if all goes fine
                 self.consecutive_error_count = 0
-                return {"url": url, "func_resp": func_resp, "status": resp.status, "error": None}
+                return {"url": url, "req": req_features, "func_resp": func_resp, "status": resp.status, "error": None}
         except Exception as e:
             # Set the current error - increment if the same error
             if type(e) == self.cur_err:
@@ -185,25 +199,33 @@ class AsyncScrape(BaseScrape):
             # Check if acceptable error
             if type(e) in self.acceptable_errors:
                 logging.warning(
-                    f"Acceptable error in request or post processing {url} - {e}")
+                    f"Acceptable error in request or post processing {req_features} - {e}")
             # Raise error
             else:
                 logging.error(
-                    f"Unhandled error in request or post processing {url} - {e}")
+                    f"Unhandled error in request or post processing {req_features} - {e}")
                 if f"{e}" == "":
                     raise e
-            return {"url": url, "func_resp": None, "status": status, "error": e}
+            return {"url": url, "req": req_features, "func_resp": None, "status": status, "error": e}
 
     async def _fetch_async(self,
-                           session, url
+                           session: aiohttp.ClientSession,
+                           req_features: List[Union[str, dict]],
+                           req_type: str = "GET"
                            ):
         """Function for getting routes from one locationt to another by different 
         modes of transport.
 
         args:
         ----
-        session - aiohttp.ClientSession() object
-        url - str - url to be requested
+        session
+            aiohttp.ClientSession() object
+        req_features: List[Union[str, dict]]
+            the features of the request. 
+            GET - this is a list with one entry [url] 
+            POST - this is a list with two entries [url, payload] 
+        req_type: str = "GET"
+            The type of request to execute
 
         returns:
         ----
@@ -211,35 +233,44 @@ class AsyncScrape(BaseScrape):
         """
         # Establish return object
         rtrn = {
-            "url": url,
+            "req": req_features[0],
             "func_resp": None,
             "status": None
         }
         # Fetch
-        rtrn = await self._fetch(session, url)
+        rtrn = await self._fetch(session, req_features, req_type)
         # Increment the pages scraped
         self.increment_pages_scraped()
         return rtrn
 
-    async def _fetch_all_async(self, urls):
+    async def _fetch_all_async(self,
+                               reqs_features: List[List[Union[str, dict]]],
+                               req_type: str = "GET"):
         """"Async function for finding the latitude and 
         longitude of a list of locations
 
         args:
         ----
-        urls - list - the pages to be scraped
+        reqs_features: List[List[Union[str, dict]]]
+            These are the features for all requests. for:
+            GET - each is a list with one entry [url] 
+            POST - each is a list with two entries [url, payload] 
+        req_type: str = "GET"
+            The type of request to execute
 
         returns:
         ----
         gathered asyncio tasks
         """
         tasks = []
+        resps = []
         async with aiohttp.ClientSession() as session:
-            for url in urls:
+            for rf in reqs_features:
                 tasks.append(
                     self._fetch_async(
                         session,
-                        url
+                        rf,
+                        req_type
                     )
                 )
             self.gathered_tasks = asyncio.gather(*tasks)
@@ -250,16 +281,21 @@ class AsyncScrape(BaseScrape):
                 r.result() for r in self.gathered_tasks._children
                 if not r.cancelled()
             ]
-            return resps
+        return resps
 
     # run from terminal
-    def scrape_all(self, urls: list = []):
+    def scrape_all(self, urls: List[str] = [], payloads: List[dict] = None, req_type: str = "GET") -> List[dict]:
         """"Function asynchronously scraping html from urls and passing 
         them through the post processing function
 
         args:
         ----
-        urls - list - the pages to be scraped
+        urls: List[str] = []
+            the pages to be scraped
+        payloads: List[dict] = None
+            the payloads for each page
+        req_type: str = "GET"
+            The type of request to execute
 
         returns:
         ----
@@ -276,56 +312,57 @@ class AsyncScrape(BaseScrape):
         # Establish urls
         if not len(urls):
             return []
-        # Set a dataframe for tracking the url attempts
-        self.tracker = {
-            u: {"scraped": False, "attempts": 0}
-            for u in urls
-        }
         resps = dict()
         scrape_resps = []
-        scrape_urls = set(urls)
-        all_failed_urls = set()
-        logging.info(f"{len(urls)} unique urls from {len(scrape_urls)}")
+        reqs_features = self._build_req_features(urls, payloads)
+        all_failed_reqs = set()
+        logging.info(f"{len(reqs_features)} unique urls from {len(urls)}")
+        # Set a dataframe for tracking the url attempts
+        self.tracker = {
+            req: {"scraped": False, "attempts": 0}
+            for req in reqs_features
+        }
         # Start the loop
         self.loop = self._get_event_loop()
-        while len(scrape_urls):
-            init_len = len(scrape_urls)
+        while len(reqs_features):
+            init_len = len(reqs_features)
             # Ensure shutdown flag is reset self.shutdown_initiated
             self.shutdown_initiated = False
             self.reset_pages_scraped()
-            self.total_to_scrape = len(scrape_urls)
+            self.total_to_scrape = len(reqs_features)
             # Create batches for rate limiting
-            scrape_urls = list(scrape_urls)
-            batches = [set(scrape_urls[i:i+self.call_rate_limit])
+            reqs_features = list(reqs_features)
+            batches = [set(reqs_features[i:i+self.call_rate_limit])
                        for i in range(0, self.total_to_scrape, self.call_rate_limit)] \
                 if self.call_rate_limit is not None \
-                else [set(scrape_urls)]
-            scrape_urls = set(scrape_urls)
-            for i, batch_urls in enumerate(batches):
+                else [set(reqs_features)]
+            reqs_features = set(reqs_features)
+            for i, batch_reqs in enumerate(batches):
                 st_time = datetime.now()
                 # Gather tasks and run
-                self.coro = self._fetch_all_async(batch_urls)
+                self.coro = self._fetch_all_async(
+                    batch_reqs, req_type=req_type)
                 # Build try except clause for premature cancellation
                 scrape_resps.extend(self.loop.run_until_complete(self.coro))
                 # Pause if call rate too fast
                 if i < len(batches) - 1:
-                    self.limit_call_rate(len(batch_urls), st_time)
+                    self.limit_call_rate(len(batch_reqs), st_time)
             # Process responses
-            scrape_urls, new_resps, failed_urls = \
-                self.handle_responses(scrape_urls, scrape_resps, init_len)
+            reqs_features, new_resps, failed_reqs = \
+                self.handle_responses(reqs_features, scrape_resps, init_len)
             resps |= new_resps
-            all_failed_urls |= failed_urls
+            all_failed_reqs |= failed_reqs
             # Sleep before running again
             # - shutdown must have been initiated
             # - there must still be urls to scrape
             # - the rest between attempt flag must be set to True
             if self.shutdown_initiated \
-                    and len(scrape_urls) \
+                    and len(reqs_features) \
                     and self.rest_between_attempts:
                 logging.info(f"Sleeping for {self.rest_wait} seconds")
                 sleep(self.rest_wait)
         logging.info(
-            f"Scraping complete {len(all_failed_urls)}/{len(set(urls))} urls failed")
+            f"Scraping complete {len(all_failed_reqs)}/{len(reqs_features)} reqs failed")
         # Convert resps back
         resps = [v for _, v in resps.items()]
         # end the job

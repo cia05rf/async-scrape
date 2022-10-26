@@ -1,5 +1,6 @@
 from time import sleep
 from datetime import datetime
+from typing import List, Union
 from requests_html import HTMLSession
 import logging
 from requests import Response
@@ -89,16 +90,27 @@ class Scrape(BaseScrape):
         self._get_pac_session()
         self.session = self.pac_session
 
-    def _request(self, url: str):
-        return self.session.get(url, headers=self.headers)
+    def _request(self, url: str, payload: dict = None, req_type: str = "GET"):
+        return self.session.request(
+            req_type.lower(),
+            url,
+            json=dict(payload) if payload is not None else None,
+            headers=self.headers
+            )
 
-    def _fetch(self, url: str):
+    def _fetch(self,
+               req_features: List[Union[str, dict]],
+               req_type: str = "GET"):
         """Function to fetch HTML from url
 
         args:
         ----
-        url:str
-            url to be requested
+        req_features: List[Union[str, dict]]
+            the features of the request. 
+            GET - this is a list with one entry [url] 
+            POST - this is a list with two entries [url, payload] 
+        req_type: str = "GET"
+            The type of request to execute
 
         returns:
         ----
@@ -106,10 +118,12 @@ class Scrape(BaseScrape):
         """
         resp = None
         status = None
+        url, payload = req_features
         # Make the request
         try:
             if url:
-                resp = self._request(url)
+                resp = self._request(
+                    url, payload=payload, req_type=req_type)
                 if isinstance(resp, Response):
                     status = resp.status_code
                     html = resp.text
@@ -127,7 +141,7 @@ class Scrape(BaseScrape):
                     if html is not None else None
                 # Reset self.acceptable_error_count if all goes fine
                 self.consecutive_error_count = 0
-                return {"url": url, "func_resp": func_resp, "status": status, "error": None}
+                return {"url": url, "req": req_features, "func_resp": func_resp, "status": status, "error": None}
         except Exception as e:
             # Set the current error - increment if the same error
             if type(e) == self.cur_err:
@@ -155,16 +169,24 @@ class Scrape(BaseScrape):
                     f"Unhandled error in request or post processing {url} - {e}")
                 if f"{e}" == "":
                     raise e
-            return {"url": url, "func_resp": None, "status": status, "error": e}
+            return {"url": url, "req": req_features, "func_resp": None, "status": status, "error": e}
 
     # run from terminal
-    def scrape_all(self, urls: list):
+    def scrape_all(self,
+                   urls: List[str] = [],
+                   payloads: List[dict] = None, req_type: str = "GET"
+                   ) -> List[dict]:
         """"Function scraping html from urls and passing 
         them through the post processing function
 
         args:
         ----
-        urls - list - the pages to be scraped
+        urls: List[str] = []
+            the pages to be scraped
+        payloads: List[dict] = None
+            the payloads for each page
+        req_type: str = "GET"
+            The type of request to execute
 
         returns:
         ----
@@ -187,18 +209,23 @@ class Scrape(BaseScrape):
             for u in urls
         }
         resps = dict()
-        scrape_urls = set(urls)
-        all_failed_urls = set()
-        logging.info(f"{len(urls)} unique urls from {len(scrape_urls)}")
-        while len(scrape_urls):
-            init_len = len(scrape_urls)
+        reqs_features = self._build_req_features(urls, payloads)
+        all_failed_reqs = set()
+        logging.info(f"{len(reqs_features)} unique urls from {len(urls)}")
+        # Set a dataframe for tracking the url attempts
+        self.tracker = {
+            req: {"scraped": False, "attempts": 0}
+            for req in reqs_features
+        }
+        while len(reqs_features):
+            init_len = len(reqs_features)
             self.reset_pages_scraped()
-            self.total_to_scrape = len(scrape_urls)
+            self.total_to_scrape = len(reqs_features)
             # Run the scrapes
             scrape_resps = []
-            for url in scrape_urls:
+            for rf in reqs_features:
                 st_time = datetime.now()
-                scrape_resps.append(self._fetch(url))
+                scrape_resps.append(self._fetch(rf, req_type))
                 self.increment_pages_scraped()
                 # Regenerate headers
                 if self.randomise_headers:
@@ -206,20 +233,20 @@ class Scrape(BaseScrape):
                 # Rest if rate limiting
                 self.limit_call_rate(1, st_time)
             # Process responses
-            scrape_urls, new_resps, failed_urls = \
-                self.handle_responses(scrape_urls, scrape_resps, init_len)
+            reqs_features, new_resps, failed_reqs = \
+                self.handle_responses(reqs_features, scrape_resps, init_len)
             resps |= new_resps
-            all_failed_urls |= failed_urls
+            all_failed_reqs |= failed_reqs
             # Sleep before running again
             # - shutdown must have been initiated
             # - there must still be urls to scrape
             # - the rest between attempt flag must be set to True
-            if len(scrape_urls) \
+            if len(reqs_features) \
                     and self.rest_between_attempts:
                 logging.info(f"Sleeping for {self.rest_wait} seconds")
                 sleep(self.rest_wait)
         logging.info(
-            f"Scraping complete {len(all_failed_urls)}/{len(set(urls))} urls failed")
+            f"Scraping complete {len(all_failed_reqs)}/{len(reqs_features)} reqs failed")
         # Convert resps back
         resps = [v for _, v in resps.items()]
         # end the job

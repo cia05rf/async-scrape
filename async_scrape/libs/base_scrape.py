@@ -1,5 +1,5 @@
 from datetime import datetime, timedelta
-from typing import List
+from typing import List, Set
 from pypac import PACSession, get_pac
 import sys
 import re
@@ -21,7 +21,7 @@ class BaseScrape:
         use_proxy - bool:False - should a proxy be used
         proxy - str:None - what is the address of the proxy ONLY VALID IF
             PROXY IS TRUE
-        pac_Url - str:None - the location of the pac information ONLY VALID IF
+        pac_url - str:None - the location of the pac information ONLY VALID IF
             PROXY IS TRUE
         """
         self.pages_scraped = 0
@@ -31,45 +31,45 @@ class BaseScrape:
         self.time_marks = []
         self.use_proxy = use_proxy
         self.proxy = proxy
-        self.pac = get_pac(url=pac_url) \
+        self.pac = get_pac(req=pac_url) \
             if self.use_proxy and pac_url is not None else None
         self.pac_session = None
         # Variables for randomly generating headers
         self.header_vars = None
         self.call_rate_limit = call_rate_limit
 
-    def _deconstruct_url(self, url):
-        if re.search(r"^http://", url):
-            return "http", url[7:]
-        elif re.search(r"^https://", url):
-            return "https", url[8:]
+    def _deconstruct_req(self, req):
+        if re.search(r"^http://", req):
+            return "http", req[7:]
+        elif re.search(r"^https://", req):
+            return "https", req[8:]
         else:
-            raise ValueError(f"Invalid url -> {url}")
+            raise ValueError(f"Invalid req -> {req}")
 
     def _get_pac_session(self):
         if not self.pac_session:
             self.pac_session = PACSession(self.pac)
         return self.pac_session
 
-    def _get_proxies(self, url):
+    def _get_proxies(self, req):
         if self.use_proxy:
             # use pypac
             proxies = self.pac_session \
                 ._get_proxy_resolver(self.pac) \
-                .get_proxy_for_requests(url)
+                .get_proxy_for_requests(req)
         else:
             proxies = None
         return proxies
 
-    def _get_proxy(self, url):
+    def _get_proxy(self, req):
         if self.use_proxy:
             if self.proxy:
                 # use given proxy
                 proxy = self.proxy
             elif self.pac:
                 # use pypac
-                proxies = self._get_proxies(url)
-                match = re.search(r"^(\w*)", str(url))
+                proxies = self._get_proxies(req)
+                match = re.search(r"^(\w*)", str(req))
                 proxy = proxies[match.group()]
             else:
                 raise ValueError(
@@ -77,6 +77,26 @@ class BaseScrape:
         else:
             proxy = None
         return proxy
+
+    def _build_req_features(self, urls: List[str], payloads: List[dict] = None) -> Set[str]:
+        """Build request batches for post requests"""
+        # Convert payloads to hashable types (tuple)
+        if payloads is None:
+            payloads = [None for _ in range(len(urls))]
+        else:
+            payloads = [
+                tuple(v.items())
+                if isinstance(v, dict) else None
+                for v in payloads
+            ]
+        # Adjust length of payload
+        if len(payloads) < len(urls):
+            payloads += [None for _ in range(len(urls) - len(payloads))]
+        elif len(payloads) > len(urls):
+            payloads = payloads[:len(urls)]
+        # Zip
+        reqs_features = set(zip(urls, payloads))
+        return reqs_features
 
     def limit_call_rate(self, call_count: int, st_time: datetime) -> float:
         if self.call_rate_limit is not None:
@@ -90,43 +110,43 @@ class BaseScrape:
                 sleep(t)
 
     def handle_responses(self,
-                         scrape_urls: List[str],
+                         reqs_features: Set[tuple],
                          scrape_resps: dict,
                          init_len: int
                          ):
         # Add scrape_resps to resps
-        new_resps = {r["url"]: r for r in scrape_resps}
-        # Get scraped urls
+        new_resps = {r["req"]: r for r in scrape_resps}
+        # Get scraped reqs
         # Split success and fails
-        success_urls = set([
-            r["url"] for r in scrape_resps
+        success_reqs = set([
+            r["req"] for r in scrape_resps
             if not r["error"]
         ])
-        errored_urls = set([
-            r["url"] for r in scrape_resps
+        errored_reqs = set([
+            r["req"] for r in scrape_resps
             if r["error"]
         ])
-        # Increment attempts count on each scraped url
-        self._increment_attempts(True, scrape_urls)
+        # Increment attempts count on each scraped req
+        self._increment_attempts(True, reqs_features)
         # Increment attempts count on each attempted but failed (IE had an error
         # but not cancelled)
-        self._increment_attempts(False, errored_urls)
-        # Remove scraped urls from scrape_urls
-        scrape_urls = scrape_urls.difference(success_urls)
-        # Remove urls where too many attempts have been made
-        failed_urls = set(k for k, v in self.tracker.items()
+        self._increment_attempts(False, errored_reqs)
+        # Remove scraped reqs from reqs_features
+        reqs_features = reqs_features.difference(success_reqs)
+        # Remove reqs where too many attempts have been made
+        failed_reqs = set(k for k, v in self.tracker.items()
                           if v["attempts"] >= self.attempt_limit)
-        scrape_urls = scrape_urls.difference(failed_urls)
+        reqs_features = reqs_features.difference(failed_reqs)
         logging.info(f"""Scraping round complete, summary:
     attempted:                               {init_len}
-    successful scrapes:                      {len(success_urls)}
-    errored scrapes (will attempt again):    {len(errored_urls)}
-    failed scrapes (will not attempt again): {len(failed_urls)}
-    remaining urls:                          {len(scrape_urls)}""")
-        return [scrape_urls, new_resps, failed_urls]
+    successful scrapes:                      {len(success_reqs)}
+    errored scrapes (will attempt again):    {len(errored_reqs)}
+    failed scrapes (will not attempt again): {len(failed_reqs)}
+    remaining reqs:                          {len(reqs_features)}""")
+        return [reqs_features, new_resps, failed_reqs]
 
-    def _increment_attempts(self, scraped: bool, urls: list = []):
-        for u in urls:
+    def _increment_attempts(self, scraped: bool, reqs: list = []):
+        for u in reqs:
             self.tracker[u]["scraped"] = scraped
             self.tracker[u]["attempts"] += 1
 
