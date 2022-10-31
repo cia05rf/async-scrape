@@ -114,9 +114,8 @@ def test_async_scrape_no_proxy_payload():
             randomise_headers=True
         )
         resps = async_scrape.scrape_all(POST_URLS, payloads=PAYLOADS)
-        urls = set(POST_URLS)
         success = [False if r["error"] else True for r in resps]
-        result = True if len(success) == len(urls) else False
+        result = True if len(success) == len(POST_URLS) else False
     except Exception as e:
         result = False
     assert result is True
@@ -178,31 +177,8 @@ def test_scrape_no_proxy_payload():
             randomise_headers=True
         )
         resps = scrape.scrape_all(POST_URLS, payloads=PAYLOADS)
-        urls = set(GET_URLS)
         success = [False if r["error"] else True for r in resps]
-        result = True if len(success) == len(urls) else False
-    except Exception as e:
-        logging.error(traceback.format_exc())
-        result = False
-    assert result is True
-
-
-def test_scrape_all_no_proxy():
-    try:
-        scrape = Scrape(
-            _post_process_func,
-            use_proxy=False,
-            consecutive_error_limit=100,
-            attempt_limit=5,
-            rest_between_attempts=True,
-            rest_wait=10,
-            call_rate_limit=None,
-            randomise_headers=True
-        )
-        resps = scrape.scrape_all(GET_URLS)
-        urls = set(GET_URLS)
-        success = [False if r["error"] else True for r in resps]
-        result = True if len(success) == len(urls) else False
+        result = True if len(success) == len(GET_URLS) else False
     except Exception as e:
         logging.error(traceback.format_exc())
         result = False
@@ -239,6 +215,21 @@ def test_scrape_one_no_proxy():
             attempt_limit=1
         )
         resps = scrape.scrape_one(GET_URLS[0])
+        result = True if resps["status"] else False
+    except Exception as e:
+        logging.error(traceback.format_exc())
+        result = False
+    assert result is True
+
+
+def test_scrape_one_no_proxy_payload():
+    try:
+        scrape = Scrape(
+            _post_process_func,
+            use_proxy=True,
+            attempt_limit=1
+        )
+        resps = scrape.scrape_one(POST_URLS[0], PAYLOADS[0])
         result = True if resps["status"] else False
     except Exception as e:
         logging.error(traceback.format_exc())
