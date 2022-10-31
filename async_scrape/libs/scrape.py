@@ -223,7 +223,7 @@ class Scrape(BaseScrape):
             self.total_to_scrape = len(reqs_features)
             # Run the scrapes
             scrape_resps = []
-            for rf in reqs_features:
+            for i, rf in enumerate(reqs_features):
                 st_time = datetime.now()
                 scrape_resps.append(self._fetch(rf, req_type))
                 self.increment_pages_scraped()
@@ -231,7 +231,8 @@ class Scrape(BaseScrape):
                 if self.randomise_headers:
                     self.headers = random_header_vars(self.header_vars)
                 # Rest if rate limiting
-                self.limit_call_rate(1, st_time)
+                if i < len(reqs_features) - 1:
+                    self.limit_call_rate(1, st_time)
             # Process responses
             reqs_features, new_resps, failed_reqs = \
                 self.handle_responses(reqs_features, scrape_resps, init_len)
@@ -246,7 +247,7 @@ class Scrape(BaseScrape):
                 logging.info(f"Sleeping for {self.rest_wait} seconds")
                 sleep(self.rest_wait)
         logging.info(
-            f"Scraping complete {len(all_failed_reqs)}/{len(reqs_features)} reqs failed")
+            f"Scraping complete {len(all_failed_reqs)}/{len(resps)} reqs failed")
         # Convert resps back
         resps = [v for _, v in resps.items()]
         # end the job

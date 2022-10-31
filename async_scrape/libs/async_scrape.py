@@ -313,7 +313,6 @@ class AsyncScrape(BaseScrape):
         if not len(urls):
             return []
         resps = dict()
-        scrape_resps = []
         reqs_features = self._build_req_features(urls, payloads)
         all_failed_reqs = set()
         logging.info(f"{len(reqs_features)} unique urls from {len(urls)}")
@@ -337,6 +336,7 @@ class AsyncScrape(BaseScrape):
                 if self.call_rate_limit is not None \
                 else [set(reqs_features)]
             reqs_features = set(reqs_features)
+            scrape_resps = []
             for i, batch_reqs in enumerate(batches):
                 st_time = datetime.now()
                 # Gather tasks and run
@@ -362,7 +362,7 @@ class AsyncScrape(BaseScrape):
                 logging.info(f"Sleeping for {self.rest_wait} seconds")
                 sleep(self.rest_wait)
         logging.info(
-            f"Scraping complete {len(all_failed_reqs)}/{len(reqs_features)} reqs failed")
+            f"Scraping complete {len(all_failed_reqs)}/{len(resps)} reqs failed")
         # Convert resps back
         resps = [v for _, v in resps.items()]
         # end the job
