@@ -118,7 +118,13 @@ class Scrape(BaseScrape):
         """
         resp = None
         status = None
-        url, payload = req_features
+        if req_type not in ["GET", "POST"]:
+            raise ValueError("req_type must be GET or POST")
+        if req_type == "GET":
+            url = req_features[0]
+            payload = None
+        else:
+            url, payload = req_features
         # Make the request
         try:
             if url:

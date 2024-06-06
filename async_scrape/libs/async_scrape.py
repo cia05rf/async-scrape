@@ -153,7 +153,13 @@ class AsyncScrape(BaseScrape):
         if self.randomise_headers:
             self.headers = random_header_vars(self.header_vars)
         # Get the proxy for this url
-        url, payload = req_features
+        if req_type not in ["GET", "POST"]:
+            raise ValueError("req_type must be GET or POST")
+        if req_type == "GET":
+            url = req_features[0]
+            payload = None
+        else:
+            url, payload = req_features
         proxy = self._get_proxy(url)
         status = None
         # Fetch with aiohttp session
