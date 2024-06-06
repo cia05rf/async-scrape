@@ -6,23 +6,24 @@ authors = ["Robert Franklin <cia05rf@gmail.com>"]
 maintainers = ["Robert Franklin <cia05rf@gmail.com>"]
 license = "MIT"
 readme = "README.md"
-homepage = ""
+homepage = "https://github.com/cia05rf/async-scrape/"
 repository = "https://github.com/cia05rf/async-scrape/"
-documentation = ""
+documentation = "https://github.com/cia05rf/async-scrape/"
 keywords = ["scraping", "async", "requests"]
 
 [tool.poetry.dependencies]
-python = "^3.8"
-nest-asyncio = "^1.5.6"
-aiohttp = "^3.8.3"
-PyPAC = "^0.16.0"
+python = "^3.11"
+nest-asyncio = "^1.6.0"
+aiohttp = "^3.9.5"
+pypac = "^0.16.4"
 requests-html = "^0.10.0"
-Brotli = "^1.0.9"
+brotli = "^1.1.0"
+lxml-html-clean = "^0.1.1"
 
 [tool.poetry.group.dev.dependencies]
-ipykernel = "^6.3.1"
-pytest = "^6.2.5"
-autopep8 = "^1.7.0"
+ipykernel = "^6.29.4"
+pytest = "^8.2.2"
+autopep8 = "^2.2.0"
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]
