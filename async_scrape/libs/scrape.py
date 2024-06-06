@@ -255,13 +255,16 @@ class Scrape(BaseScrape):
         return resps
 
     # run from terminal
-    def scrape_one(self, url: str):
+    def scrape_one(self, url: str, payload: dict = None):
         """"Function scraping html from a single url and passing 
         it through the post processing function
 
         args:
         ----
-        url - str - the pages to be scraped
+        url: str
+            the page to be scraped
+        payload: dict = None
+            The payload to give to the request
 
         returns:
         ----
@@ -275,7 +278,7 @@ class Scrape(BaseScrape):
         if self.use_proxy:
             self._proxy()
         for _ in range(self.attempt_limit):
-            resp = self._fetch(url)
+            resp = self._fetch((url, payload))
             if resp["status"]:
                 break
             elif self.rest_between_attempts:
