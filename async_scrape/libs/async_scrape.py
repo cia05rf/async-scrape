@@ -285,7 +285,7 @@ class AsyncScrape(BaseScrape):
             # Get results individually to deal with premature cancellation
             resps = [
                 r.result() for r in self.gathered_tasks._children
-                if not r.cancelled()
+                if not r.cancelled() and r.done()
             ]
         return resps
 
